@@ -36,6 +36,9 @@ fi
 
 echo "[4/5] building ROS2 workspace"
 chmod +x "$DRIVER_DIR"/script/*.sh
+# Odin's generated ROS2 interfaces are memory-hungry; with many cores plus other
+# workloads (e.g. local LLM servers) an unbounded -j can OOM the compiler.
+export MAKEFLAGS="-j${BUILD_JOBS:-4}"
 "$DRIVER_DIR/script/build_ros2.sh"
 # the build script swaps in package_ros2.xml; undo it so the submodule stays clean
 git -C "$DRIVER_DIR" checkout -- package.xml 2>/dev/null || true
