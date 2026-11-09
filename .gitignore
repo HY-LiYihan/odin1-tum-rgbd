@@ -1,0 +1,11 @@
+# ROS2 workspace built by setup.sh
+catkin_ws/
+
+# collected datasets / rosbags
+data/
+*.db3
+*.mcap
+
+# python
+__pycache__/
+*.pyc
