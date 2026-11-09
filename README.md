@@ -136,6 +136,12 @@ v_src = y * (theta_d/r) * A22 + v0
 4. **图像方向**由设备实际安装姿态决定；若设备倒置，图像也是倒的（不要软件翻转，否则内参/外参都需要跟着改）。
 5. 采集前确认设备已独立供电；未上电时 USB 虽能枚举，但驱动会报 `Open device failed`。
 
+## 常见问题
+
+- **日志出现 `Open device failed` / `recv control cmd failed or timed out`**：设备刚上电或 USB 重新枚举时驱动会放弃初始化，重新运行 `tools/odin_driver.sh` 即可。`collect_tum.sh` 记录前会先探测 `/odin1/odometry`，没有数据会直接报错退出。
+- **编译时 g++ 段错误 / 被 killed**：并行编译生成的大量 ROS2 接口会吃满内存，`setup.sh` 默认 `-j4`；内存更紧张时用 `BUILD_JOBS=2 ./setup.sh`。
+- **`ros2 bag record` 录到 0 帧**：说明驱动没在推流（同上，重启驱动）。
+
 ## 致谢
 
 驱动与设备标定来自 [ManifoldTech Odin SDK](https://github.com/manifoldsdk/odin_ros_driver)（Apache-2.0）。本仓库仅包含采集与格式转换脚本。

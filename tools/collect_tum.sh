@@ -30,6 +30,13 @@ if [ -e "$SEQ/bag" ]; then
   exit 1
 fi
 
+# fail fast if the device never started streaming (e.g. "Open device failed")
+if ! timeout 5 ros2 topic echo /odin1/odometry --once >/dev/null 2>&1; then
+  echo "[error] no odometry data - check the driver log and restart it if it"
+  echo "        reported 'Open device failed'"
+  exit 1
+fi
+
 echo "[info] recording to $SEQ/bag  (Ctrl-C to stop)"
 ros2 bag record -o "$SEQ/bag" \
   /odin1/image/compressed \
