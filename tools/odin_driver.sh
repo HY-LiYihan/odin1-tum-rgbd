@@ -7,4 +7,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source /opt/ros/humble/setup.bash
 source "$ROOT/catkin_ws/install/setup.bash"
 
+# the driver writes image/ etc. relative to the cwd
+cd "$ROOT/catkin_ws"
 exec ros2 launch odin_ros_driver odin1_ros2.launch.py
