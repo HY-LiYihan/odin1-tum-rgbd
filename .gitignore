@@ -1,5 +1,8 @@
-# ROS2 workspace built by setup.sh
-catkin_ws/
+# ROS2 workspace build artefacts (the driver itself is a submodule)
+catkin_ws/build/
+catkin_ws/install/
+catkin_ws/log/
+catkin_ws/image/
 
 # collected datasets / rosbags
 data/

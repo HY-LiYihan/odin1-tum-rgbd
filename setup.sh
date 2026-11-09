@@ -18,31 +18,36 @@ echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", MODE="0
 sudo udevadm control --reload
 sudo udevadm trigger
 
-echo "[3/5] fetching odin_ros_driver"
+echo "[3/5] checking odin_ros_driver submodule"
 mkdir -p "$ROOT/catkin_ws/src"
-if [ ! -d "$DRIVER_DIR" ]; then
-  if ! git clone --depth 1 "$DRIVER_URL" "$DRIVER_DIR"; then
-    echo "  git clone failed, falling back to tarball"
-    tmp="$(mktemp -d)"
-    curl -sL --max-time 300 -o "$tmp/driver.tar.gz" \
-      "https://codeload.github.com/manifoldsdk/odin_ros_driver/tar.gz/refs/heads/main"
-    tar -xzf "$tmp/driver.tar.gz" -C "$tmp"
-    mv "$tmp/odin_ros_driver-main" "$DRIVER_DIR"
-    rm -rf "$tmp"
-  fi
+if [ -d "$DRIVER_DIR/.git" ] || [ -n "$(ls -A "$DRIVER_DIR" 2>/dev/null)" ]; then
+  echo "  already present ($(git -C "$DRIVER_DIR" describe --tags 2>/dev/null || echo unknown))"
+elif git clone --depth 1 "$DRIVER_URL" "$DRIVER_DIR"; then
+  echo "  cloned via git"
 else
-  echo "  already present, skipping"
+  echo "  git clone failed, falling back to tarball"
+  tmp="$(mktemp -d)"
+  curl -sL --max-time 300 -o "$tmp/driver.tar.gz" \
+    "https://codeload.github.com/manifoldsdk/odin_ros_driver/tar.gz/refs/heads/main"
+  tar -xzf "$tmp/driver.tar.gz" -C "$tmp"
+  mv "$tmp/odin_ros_driver-main" "$DRIVER_DIR"
+  rm -rf "$tmp"
 fi
 
-echo "[4/5] patching control_command.yaml"
-CONF="$DRIVER_DIR/config/control_command.yaml"
-sed -i 's/^  sendrgbundistort: 0/  sendrgbundistort: 1/' "$CONF"
-sed -i 's/^  senddepth: 0/  senddepth: 1/' "$CONF"
-grep -E "^  (sendrgbundistort|senddepth):" "$CONF"
-
-echo "[5/5] building ROS2 workspace"
+echo "[4/5] building ROS2 workspace"
 chmod +x "$DRIVER_DIR"/script/*.sh
 "$DRIVER_DIR/script/build_ros2.sh"
+# the build script swaps in package_ros2.xml; undo it so the submodule stays clean
+git -C "$DRIVER_DIR" checkout -- package.xml 2>/dev/null || true
+
+# Enable undistorted RGB + the depth demo by patching the *installed* config only,
+# so the submodule working tree stays clean.
+INSTALL_CONF="$ROOT/catkin_ws/install/odin_ros_driver/share/odin_ros_driver/config/control_command.yaml"
+sed -i 's/^  sendrgbundistort: 0/  sendrgbundistort: 1/' "$INSTALL_CONF"
+sed -i 's/^  senddepth: 0/  senddepth: 1/' "$INSTALL_CONF"
+grep -E "^  (sendrgbundistort|senddepth):" "$INSTALL_CONF"
+
+echo "[5/5] done"
 
 echo
 echo "done. next:"

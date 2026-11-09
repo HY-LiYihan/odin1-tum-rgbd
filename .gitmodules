@@ -1,0 +1,3 @@
+[submodule "catkin_ws/src/odin_ros_driver"]
+	path = catkin_ws/src/odin_ros_driver
+	url = git@github.com:manifoldsdk/odin_ros_driver.git

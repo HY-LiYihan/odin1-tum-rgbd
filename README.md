@@ -14,8 +14,9 @@
 │   ├── collect_tum.sh           # 录 bag，Ctrl-C 后自动转 TUM 数据集
 │   ├── bag2tum.py               # bag -> TUM 格式转换（去畸变、点云投深度、位姿）
 │   └── fisheye2pinhole.py       # 鱼眼图 -> 针孔图（可从 bag 或图片目录批量转）
-├── catkin_ws/                   # setup.sh 生成的 ROS2 工作空间（git 忽略）
-└── data/                        # 采集结果（git 忽略）
+├── catkin_ws/                      # ROS2 工作空间（build/install/log 被忽略）
+│   └── src/odin_ros_driver/        # 官方驱动（git submodule, v0.14.4）
+└── data/                           # 采集结果（git 忽略）
 ```
 
 ## 环境要求
@@ -28,17 +29,30 @@
 ## 快速开始
 
 ```bash
-git clone <this-repo> && cd odin1-tum-rgbd
+git clone --recurse-submodules <this-repo> && cd odin1-tum-rgbd
 ./setup.sh
+```
+
+已经 clone 过但没带 submodule 时：
+
+```bash
+git submodule update --init --recursive
+```
+
+submodule 默认走 SSH（`git@github.com:manifoldsdk/odin_ros_driver.git`）。若机器上没有配置 GitHub SSH key，可改成 HTTPS：
+
+```bash
+git config submodule.catkin_ws/src/odin_ros_driver.url https://github.com/manifoldsdk/odin_ros_driver.git
+git submodule update --init --recursive
 ```
 
 `setup.sh` 会依次完成：
 
 1. 安装编译依赖（OpenCV / PCL / yaml-cpp / libusb / Eigen / OpenSSL）
 2. 写入 `/etc/udev/rules.d/99-odin-usb.rules`（`2207:0019`，允许普通用户访问）
-3. 把 `odin_ros_driver` 拉取到 `catkin_ws/src/`（网络受限时自动回退到 tarball）
-4. 打开配置里的 `sendrgbundistort` 与 `senddepth`
-5. 编译工作空间（`colcon build`）
+3. 检查 `catkin_ws/src/odin_ros_driver` submodule，缺失时回退到 git clone / tarball
+4. 编译工作空间（`colcon build`），并只修改安装目录里的 `control_command.yaml`，
+   打开 `sendrgbundistort` 与 `senddepth`（submodule 工作区保持干净）
 
 然后：
 
