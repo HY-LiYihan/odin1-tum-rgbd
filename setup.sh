@@ -40,12 +40,13 @@ chmod +x "$DRIVER_DIR"/script/*.sh
 # the build script swaps in package_ros2.xml; undo it so the submodule stays clean
 git -C "$DRIVER_DIR" checkout -- package.xml 2>/dev/null || true
 
-# Enable undistorted RGB + the depth demo by patching the *installed* config only,
-# so the submodule working tree stays clean.
-INSTALL_CONF="$ROOT/catkin_ws/install/odin_ros_driver/share/odin_ros_driver/config/control_command.yaml"
-sed -i 's/^  sendrgbundistort: 0/  sendrgbundistort: 1/' "$INSTALL_CONF"
-sed -i 's/^  senddepth: 0/  senddepth: 1/' "$INSTALL_CONF"
-grep -E "^  (sendrgbundistort|senddepth):" "$INSTALL_CONF"
+# Enable undistorted RGB + the depth demo. Both nodes read
+# <package source dir>/config/control_command.yaml via COLCON_PREFIX_PATH, so the
+# patch has to go into the submodule (it will show up as one modified file).
+CONF="$DRIVER_DIR/config/control_command.yaml"
+sed -i 's/^  sendrgbundistort: 0/  sendrgbundistort: 1/' "$CONF"
+sed -i 's/^  senddepth: 0/  senddepth: 1/' "$CONF"
+grep -E "^  (sendrgbundistort|senddepth):" "$CONF"
 
 echo "[5/5] done"
 

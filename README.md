@@ -51,8 +51,9 @@ git submodule update --init --recursive
 1. 安装编译依赖（OpenCV / PCL / yaml-cpp / libusb / Eigen / OpenSSL）
 2. 写入 `/etc/udev/rules.d/99-odin-usb.rules`（`2207:0019`，允许普通用户访问）
 3. 检查 `catkin_ws/src/odin_ros_driver` submodule，缺失时回退到 git clone / tarball
-4. 编译工作空间（`colcon build`），并只修改安装目录里的 `control_command.yaml`，
-   打开 `sendrgbundistort` 与 `senddepth`（submodule 工作区保持干净）
+4. 编译工作空间（`colcon build`），并修改 `catkin_ws/src/odin_ros_driver/config/control_command.yaml`，
+   打开 `sendrgbundistort` 与 `senddepth`。驱动通过 `COLCON_PREFIX_PATH` 直接读取**源码目录**里的配置，
+   所以完成后 submodule 会显示 1 个已修改文件（`config/control_command.yaml`），属预期行为
 
 然后：
 
