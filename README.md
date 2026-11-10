@@ -29,8 +29,8 @@
 ## 快速开始
 
 ```bash
-git clone --recurse-submodules <this-repo> && cd odin1-tum-rgbd
-./setup.sh
+git clone --recurse-submodules https://github.com/HY-LiYihan/odin1-tum-rgbd.git
+cd odin1-tum-rgbd && ./setup.sh
 ```
 
 已经 clone 过但没带 submodule 时：
@@ -69,7 +69,7 @@ tools/collect_tum.sh data/seq01
 
 ```
 seq01/
-├── rgb/<timestamp>.png        去畸变后的针孔图（1600x1296, bgr8 -> RGB PNG）
+├── rgb/<timestamp>.png        去畸变后的针孔图（默认 1600x1296，尺寸可调，见下文「分辨率与画面比例」）
 ├── depth/<timestamp>.png      16 bit 深度，值 = 米 * depth_scale（默认 1000 即毫米），0 = 无效
 ├── rgb.txt                    "timestamp rgb/<timestamp>.png"
 ├── depth.txt                  "timestamp depth/<timestamp>.png"
@@ -131,12 +131,27 @@ v_src = y * (theta_d/r) * A22 + v0
 
 `bag2tum.py` 与 `fisheye2pinhole.py` 用的是同一套投影公式。区别是 `bag2tum.py` 会把同一组内参同时用于 RGB 去畸变、点云投深度和 `camera.txt`，所以改了 `--width/--height/--fx/--fov-scale` 之后 RGB 与深度依然逐像素对齐；`fisheye2pinhole.py` 只输出 RGB，不生成深度。
 
-换比例的例子（16:9，深度同步重投影）：
+## 分辨率与画面比例
+
+| 项目 | 数值 |
+| --- | --- |
+| 原生分辨率 | 1600 × 1296（2.07 MP） |
+| 宽高比 | 1.235 : 1（约 5:4，所以看着接近正方形） |
+| 内参 | fx 729.86, fy 729.97, cx 786.34, cy 656.52 |
+| 去畸变后视场 | 水平约 95°，垂直约 83° |
+| 帧率 | 10 Hz |
+
+四角落在鱼眼成像圆之外，去畸变后是纯黑，因此画面内容更像一个圆/方形。2 MP 摊到 95° 视场上，边缘每度只有约 17 像素，再加 MJPEG 压缩，整体偏软是传感器与视场的固有结果——`--width/--height` 只改变输出网格，不会增加信息量。
+
+常用比例（`bag2tum.py`，RGB 与 depth 同步重投影，`camera.txt` 自动更新）：
 
 ```bash
-python3 tools/bag2tum.py data/seq01/bag data/seq01_169 --width 1600 --height 900
-# 结果：1600x900，fx=fy≈729.9，cx≈786.3，cy≈458.5（camera.txt 自动写入）
+python3 tools/bag2tum.py data/seq01/bag data/seq01_169 --width 1600 --height 900   # 16:9，上下裁切，cx 786.3 / cy 458.5
+python3 tools/bag2tum.py data/seq01/bag data/seq01_sq  --width 1296 --height 1296  # 1:1，左右裁切
+python3 tools/bag2tum.py data/seq01/bag data/seq01_c   --fov-scale 1.2              # 视场收窄到约 80°，更锐
 ```
+
+`--fov-scale` 方向：大于 1 焦距变大、视场变窄、边缘更锐；小于 1 视场变广。
 
 ## 数据特性与限制
 
@@ -145,7 +160,7 @@ python3 tools/bag2tum.py data/seq01/bag data/seq01_169 --width 1600 --height 900
 3. **数据量**：原始 bag 约 13 MB/s（10 分钟约 8 GB），建议采集时预留磁盘。
 4. **图像方向**由设备实际安装姿态决定；若设备倒置，图像也是倒的（不要软件翻转，否则内参/外参都需要跟着改）。
 5. 采集前确认设备已独立供电；未上电时 USB 虽能枚举，但驱动会报 `Open device failed`。
-6. **分辨率与锐度**：原生 1600×1296（2.07 MP，约 5:4），去畸变后水平视场约 95°、垂直约 83°，四角是无有效像素的黑边。2 MP 摊到 95° 视场，边缘每度只有约 17 像素，再加 MJPEG 压缩，画面偏软是传感器与视场的固有结果；`--width/--height` 只改输出网格不会增加信息，`--fov-scale 1.2` 收窄视场、把像素集中到中心区域，看起来更锐。
+6. 分辨率、宽高比与锐度的取舍见上一节「分辨率与画面比例」。
 
 ## 常见问题
 
