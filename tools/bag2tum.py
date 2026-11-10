@@ -64,17 +64,32 @@ def load_calib(path):
     }
 
 
-def build_undistort_maps(calib):
+def resolve_projection(calib, width=None, height=None, fx=None, fy=None, fov_scale=1.0):
+    """Output pinhole grid. Defaults reproduce the sensor/driver projection."""
+    w = int(width or calib["width"])
+    h = int(height or calib["height"])
+    if w <= 0 or h <= 0:
+        sys.exit("invalid output size %dx%d" % (w, h))
+    f_x = (fx if fx else calib["fx"]) * fov_scale
+    f_y = (fy if fy else calib["fy"]) * fov_scale
+    s = f_x / calib["fx"]
+    # keep the optical axis centred when the canvas or the zoom changes
+    c_x = w / 2.0 + (calib["cx"] - calib["width"] / 2.0) * s
+    c_y = h / 2.0 + (calib["cy"] - calib["height"] / 2.0) * s
+    return {"width": w, "height": h, "fx": f_x, "fy": f_y, "cx": c_x, "cy": c_y}
+
+
+def build_undistort_maps(calib, proj):
     """Replicate PolynomialCamera (equidistant + k2..k7) -> ideal pinhole."""
-    w, h = calib["width"], calib["height"]
-    fx, fy, cx, cy, skew = calib["fx"], calib["fy"], calib["cx"], calib["cy"], calib["skew"]
+    fx0, fy0, cx0, cy0, skew = calib["fx"], calib["fy"], calib["cx"], calib["cy"], calib["skew"]
     k2, k3, k4, k5, k6, k7 = calib["k"]
+    w, h = proj["width"], proj["height"]
 
     u_out, v_out = np.meshgrid(np.arange(w, dtype=np.float64),
                                np.arange(h, dtype=np.float64))
-    x = (u_out - cx) / fx
-    y = (v_out - cy) / fy
-    x = x - y * skew / fx          # remove skew, same as the driver
+    x = (u_out - proj["cx"]) / proj["fx"]
+    y = (v_out - proj["cy"]) / proj["fy"]
+    x = x - y * skew / fx0          # remove skew, same as the driver
 
     r = np.sqrt(x * x + y * y)
     theta = np.arctan(r)
@@ -84,8 +99,8 @@ def build_undistort_maps(calib):
     xd = x * scaling
     yd = y * scaling
 
-    map_x = (xd * fx + yd * skew + cx).astype(np.float32)
-    map_y = (yd * fy + cy).astype(np.float32)
+    map_x = (xd * fx0 + yd * skew + cx0).astype(np.float32)
+    map_y = (yd * fy0 + cy0).astype(np.float32)
     return map_x, map_y
 
 
@@ -107,8 +122,8 @@ def cloud_to_xyz(msg):
     return xyz
 
 
-def project_depth(points_lidar, calib, T, fill_iters, min_depth, max_depth):
-    w, h = calib["width"], calib["height"]
+def project_depth(points_lidar, proj, T, fill_iters, min_depth, max_depth):
+    w, h = proj["width"], proj["height"]
     if points_lidar.shape[0] == 0:
         return np.zeros((h, w), dtype=np.float32)
 
@@ -122,8 +137,8 @@ def project_depth(points_lidar, calib, T, fill_iters, min_depth, max_depth):
     if z.size == 0:
         return np.zeros((h, w), dtype=np.float32)
 
-    u = np.rint(calib["fx"] * pc[:, 0] / z + calib["cx"]).astype(np.int32)
-    v = np.rint(calib["fy"] * pc[:, 1] / z + calib["cy"]).astype(np.int32)
+    u = np.rint(proj["fx"] * pc[:, 0] / z + proj["cx"]).astype(np.int32)
+    v = np.rint(proj["fy"] * pc[:, 1] / z + proj["cy"]).astype(np.int32)
     inside = (u >= 0) & (u < w) & (v >= 0) & (v < h)
     if not np.any(inside):
         return np.zeros((h, w), dtype=np.float32)
@@ -203,15 +218,29 @@ def main():
                     help="hole-filling iterations (3x3 dilation of sparse depth)")
     ap.add_argument("--no-undistort", action="store_true",
                     help="keep raw fisheye RGB (then camera.txt intrinsics are invalid)")
+    ap.add_argument("--width", type=int, help="output width (default: %d)" % 1600)
+    ap.add_argument("--height", type=int, help="output height (default: %d)" % 1296)
+    ap.add_argument("--fx", type=float, help="output fx (default: calibrated A11)")
+    ap.add_argument("--fy", type=float, help="output fy (default: calibrated A22)")
+    ap.add_argument("--fov-scale", type=float, default=1.0,
+                    help="zoom factor on fx/fy (0.8 = narrower FOV, sharper edges)")
     args = ap.parse_args()
 
     if not os.path.isfile(args.calib):
         sys.exit("calib.yaml not found: %s (start the driver once to fetch it)" % args.calib)
     calib = load_calib(args.calib)
+    if args.no_undistort:
+        proj = resolve_projection(calib)
+    else:
+        proj = resolve_projection(calib, args.width, args.height,
+                                  args.fx, args.fy, args.fov_scale)
+        print("pinhole: %dx%d fx=%.2f fy=%.2f cx=%.2f cy=%.2f" %
+              (proj["width"], proj["height"], proj["fx"], proj["fy"],
+               proj["cx"], proj["cy"]))
 
     for sub in ("rgb", "depth"):
         os.makedirs(os.path.join(args.out, sub), exist_ok=True)
-    map_x, map_y = (None, None) if args.no_undistort else build_undistort_maps(calib)
+    map_x, map_y = (None, None) if args.no_undistort else build_undistort_maps(calib, proj)
 
     storage_options = rosbag2_py.StorageOptions(uri=args.bag, storage_id="")
     converter_options = rosbag2_py.ConverterOptions(
@@ -267,7 +296,7 @@ def main():
 
         elif topic == "/odin1/cloud_raw":
             xyz = cloud_to_xyz(msg)
-            depth = project_depth(xyz, calib, calib["T_camera_lidar"],
+            depth = project_depth(xyz, proj, calib["T_camera_lidar"],
                                   args.fill_iters, args.min_depth, args.max_depth)
             depth_u16 = np.clip(np.rint(depth * args.depth_scale), 0, 65535).astype(np.uint16)
             name = "depth/%.6f.png" % ts
@@ -322,9 +351,10 @@ def main():
     c = calib
     with open(os.path.join(args.out, "camera.txt"), "w") as f:
         f.write("# Odin1 RGB camera, undistorted pinhole (OpenCV model)\n")
-        f.write("# width height\n%d %d\n" % (c["width"], c["height"]))
+        f.write("# width height\n%d %d\n" % (proj["width"], proj["height"]))
         f.write("# fx fy cx cy d0 d1 d2 d3 d4\n")
-        f.write("%.8f %.8f %.8f %.8f 0 0 0 0 0\n" % (c["fx"], c["fy"], c["cx"], c["cy"]))
+        f.write("%.8f %.8f %.8f %.8f 0 0 0 0 0\n" %
+                (proj["fx"], proj["fy"], proj["cx"], proj["cy"]))
         f.write("# depth_scale: %g   (depth[m] = png_value / %g, 0 = no measurement)\n"
                 % (args.depth_scale, args.depth_scale))
         f.write("# depth source: /odin1/cloud_raw projected into camera, fill_iters=%d\n"

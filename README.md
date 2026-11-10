@@ -102,6 +102,9 @@ python3 tools/bag2tum.py data/seq01/bag data/seq01_v2 --fill-iters 2 --depth-sca
 | `--min-depth` / `--max-depth` | 有效深度范围，默认 0.2 / 65 m |
 | `--fill-iters` | 稀疏深度空洞填充迭代次数，默认 1 |
 | `--no-undistort` | 保留原始鱼眼 RGB（此时 `camera.txt` 内参无效） |
+| `--width` / `--height` | 输出分辨率，默认 `1600 1296`（原生尺寸） |
+| `--fx` / `--fy` | 输出焦距，默认取标定值（约 729.9） |
+| `--fov-scale` | 焦距缩放（0.8 = 视场收窄 20%，边缘更锐） |
 
 ## 鱼眼转针孔
 
@@ -126,7 +129,14 @@ u_src = x * (theta_d/r) * A11 + A12*y + u0
 v_src = y * (theta_d/r) * A22 + v0
 ```
 
-注意：改动输出内参或分辨率后，`depth/` 的投影网格（1600x1296、fx=730）不再匹配，需要同步重新投影或只使用 RGB。
+`bag2tum.py` 与 `fisheye2pinhole.py` 用的是同一套投影公式。区别是 `bag2tum.py` 会把同一组内参同时用于 RGB 去畸变、点云投深度和 `camera.txt`，所以改了 `--width/--height/--fx/--fov-scale` 之后 RGB 与深度依然逐像素对齐；`fisheye2pinhole.py` 只输出 RGB，不生成深度。
+
+换比例的例子（16:9，深度同步重投影）：
+
+```bash
+python3 tools/bag2tum.py data/seq01/bag data/seq01_169 --width 1600 --height 900
+# 结果：1600x900，fx=fy≈729.9，cx≈786.3，cy≈458.5（camera.txt 自动写入）
+```
 
 ## 数据特性与限制
 
@@ -135,6 +145,7 @@ v_src = y * (theta_d/r) * A22 + v0
 3. **数据量**：原始 bag 约 13 MB/s（10 分钟约 8 GB），建议采集时预留磁盘。
 4. **图像方向**由设备实际安装姿态决定；若设备倒置，图像也是倒的（不要软件翻转，否则内参/外参都需要跟着改）。
 5. 采集前确认设备已独立供电；未上电时 USB 虽能枚举，但驱动会报 `Open device failed`。
+6. **分辨率与锐度**：原生 1600×1296（2.07 MP，约 5:4），去畸变后水平视场约 95°、垂直约 83°，四角是无有效像素的黑边。2 MP 摊到 95° 视场，边缘每度只有约 17 像素，再加 MJPEG 压缩，画面偏软是传感器与视场的固有结果；`--width/--height` 只改输出网格不会增加信息，`--fov-scale 0.8` 裁到中心区域看起来更锐。
 
 ## 常见问题
 
