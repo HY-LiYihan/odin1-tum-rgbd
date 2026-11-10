@@ -223,7 +223,7 @@ def main():
     ap.add_argument("--fx", type=float, help="output fx (default: calibrated A11)")
     ap.add_argument("--fy", type=float, help="output fy (default: calibrated A22)")
     ap.add_argument("--fov-scale", type=float, default=1.0,
-                    help="zoom factor on fx/fy (0.8 = narrower FOV, sharper edges)")
+                    help="multiply fx/fy (>1 = narrower FOV, sharper edges, <1 = wider)")
     args = ap.parse_args()
 
     if not os.path.isfile(args.calib):

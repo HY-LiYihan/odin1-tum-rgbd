@@ -78,7 +78,7 @@ def main():
     ap.add_argument("--width", type=int, help="output width (default: source width)")
     ap.add_argument("--height", type=int, help="output height (default: source height)")
     ap.add_argument("--fov-scale", type=float, default=1.0,
-                    help="multiply fx/fy by this (0.8 = narrower FOV, 1.2 = wider)")
+                    help="multiply fx/fy by this (>1 = narrower FOV, <1 = wider)")
     args = ap.parse_args()
 
     if not os.path.isfile(args.calib):
